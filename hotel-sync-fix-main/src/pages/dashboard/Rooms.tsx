@@ -455,7 +455,8 @@ export default function Rooms() {
                                 const checkInDate = new Date(checkInYear, checkInMonth - 1, checkInDay);
                                 const checkOutDate = new Date(checkOutYear, checkOutMonth - 1, checkOutDay);
                                 const days = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-                                return (days * room.price).toFixed(2);
+                                // Multiplicar por dias × pessoas × preço
+                                return (days * room.price * numGuests).toFixed(2);
                               })()}
                             </span>
                           </div>

@@ -40,24 +40,40 @@ export default function Statistics() {
 
       console.log(`📊 Buscando estatísticas de ${monthStart} até ${monthEnd}`);
 
-      // Buscar reservas do mês selecionado
-      const { data: reservations, error: reservationsError } = await supabase
+      // Buscar TODAS as reservas do mês (para estatísticas gerais)
+      const { data: allReservations, error: allReservationsError } = await supabase
         .from('reservations')
         .select(`
           *,
           room:rooms(*)
         `)
         .gte('created_at', monthStart)
-        .lte('created_at', monthEnd);
+        .lte('created_at', monthEnd)
+        .neq('status', 'cancelled'); // Excluir canceladas
 
-      if (reservationsError) throw reservationsError;
+      if (allReservationsError) throw allReservationsError;
+
+      // Buscar apenas reservas COMPLETADAS para calcular receita
+      const { data: completedForRevenue, error: completedRevenueError } = await supabase
+        .from('reservations')
+        .select(`
+          total_price,
+          room:rooms(type)
+        `)
+        .eq('status', 'completed')
+        .gte('check_out', monthStart)
+        .lte('check_out', monthEnd);
+
+      if (completedRevenueError) throw completedRevenueError;
 
       // Calcular estatísticas
-      const totalRevenue = reservations?.reduce((sum, r) => sum + Number(r.total_price), 0) || 0;
-      const totalReservations = reservations?.length || 0;
+      // RECEITA: Apenas de reservas COMPLETADAS (check-out confirmado)
+      const totalRevenue = completedForRevenue?.reduce((sum, r) => sum + Number(r.total_price), 0) || 0;
+      // TOTAL DE RESERVAS: Todas exceto canceladas
+      const totalReservations = allReservations?.length || 0;
 
-      // Calcular dias médios de estadia
-      const totalDays = reservations?.reduce((sum, r) => {
+      // Calcular dias médios de estadia (usando todas as reservas exceto canceladas)
+      const totalDays = allReservations?.reduce((sum, r) => {
         const days = Math.ceil(
           (parseDateSafe(r.check_out).getTime() - parseDateSafe(r.check_in).getTime()) / (1000 * 60 * 60 * 24)
         );
@@ -73,11 +89,11 @@ export default function Statistics() {
       if (roomsError) throw roomsError;
 
       const totalRooms = rooms?.length || 0;
-      const occupiedRooms = reservations?.filter(r => r.status === 'active').length || 0;
+      const occupiedRooms = allReservations?.filter(r => r.status === 'active').length || 0;
       const occupancyRate = totalRooms > 0 ? (occupiedRooms / totalRooms) * 100 : 0;
 
-      // Estatísticas por tipo de quarto
-      const typeStats = reservations?.reduce((acc, r) => {
+      // Estatísticas por tipo de quarto (apenas reservas completadas para receita)
+      const typeStats = completedForRevenue?.reduce((acc, r: any) => {
         const roomType = r.room?.type || 'Desconhecido';
         if (!acc[roomType]) {
           acc[roomType] = { type: roomType, count: 0, revenue: 0 };
@@ -89,7 +105,7 @@ export default function Statistics() {
 
       const roomTypeStats = Object.values(typeStats || {});
 
-      // Buscar histórico de reservas concluídas
+      // Buscar histórico de reservas concluídas DO MÊS SELECIONADO
       const { data: completed, error: completedError } = await supabase
         .from('reservations')
         .select(`
@@ -98,8 +114,9 @@ export default function Statistics() {
           guest:guests(*)
         `)
         .eq('status', 'completed')
-        .order('check_out', { ascending: false })
-        .limit(50);
+        .gte('check_out', monthStart)
+        .lte('check_out', monthEnd)
+        .order('check_out', { ascending: false });
 
       if (completedError) throw completedError;
 
