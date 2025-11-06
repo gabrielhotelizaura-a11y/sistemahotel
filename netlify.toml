@@ -1,7 +1,9 @@
 ## Netlify config para monorepo/subpasta
 ## Faz o build dentro de `hotel-sync-fix-main` e publica o `dist` gerado lá
 [build]
-  command = "cd hotel-sync-fix-main && npm run build:production"
+  # Garantir que as dependências sejam instaladas dentro da subpasta
+  # (o Netlify executa a etapa de install no root por padrão).
+  command = "cd hotel-sync-fix-main && npm ci && npm run build:production"
   publish = "hotel-sync-fix-main/dist"
 
 [build.environment]
