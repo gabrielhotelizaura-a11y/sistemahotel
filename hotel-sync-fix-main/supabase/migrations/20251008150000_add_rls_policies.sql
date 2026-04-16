@@ -13,12 +13,14 @@ DROP POLICY IF EXISTS "Authenticated users can view guests" ON guests;
 DROP POLICY IF EXISTS "Admin and funcionario can manage guests" ON guests;
 DROP POLICY IF EXISTS "Everyone can view available rooms" ON rooms;
 DROP POLICY IF EXISTS "Admin can manage rooms" ON rooms;
+DROP POLICY IF EXISTS "Staff can manage rooms" ON rooms;
 DROP POLICY IF EXISTS "Authenticated users can view reservations" ON reservations;
 DROP POLICY IF EXISTS "Admin and funcionario can manage reservations" ON reservations;
 DROP POLICY IF EXISTS "Authenticated users can view expenses" ON expenses;
 DROP POLICY IF EXISTS "Admin and funcionario can manage expenses" ON expenses;
 DROP POLICY IF EXISTS "Users can view their own role" ON user_roles;
 DROP POLICY IF EXISTS "Only admins can modify roles" ON user_roles;
+DROP POLICY IF EXISTS "Service role can manage user roles" ON user_roles;
 
 -- Profiles policies
 CREATE POLICY "Users can view their own profile"
@@ -51,14 +53,14 @@ CREATE POLICY "Everyone can view available rooms"
   ON rooms FOR SELECT
   USING (status = 'available' OR auth.role() = 'authenticated');
 
-CREATE POLICY "Admin can manage rooms"
+CREATE POLICY "Staff can manage rooms"
   ON rooms FOR ALL
   TO authenticated
   USING (
     EXISTS (
       SELECT 1 FROM user_roles
       WHERE user_id = auth.uid()
-      AND role = 'admin'
+      AND role IN ('admin', 'funcionario')
     )
   );
 
@@ -99,18 +101,14 @@ CREATE POLICY "Admin and funcionario can manage expenses"
 -- User roles policies
 CREATE POLICY "Users can view their own role"
   ON user_roles FOR SELECT
+  TO authenticated
   USING (user_id = auth.uid());
 
-CREATE POLICY "Only admins can modify roles"
+CREATE POLICY "Service role can manage user roles"
   ON user_roles FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role = 'admin'
-    )
-  );
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
 
 -- Create function to check if user is admin
 CREATE OR REPLACE FUNCTION is_admin(user_id uuid)

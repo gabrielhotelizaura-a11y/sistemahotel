@@ -14,6 +14,7 @@ END;
 $$;
 
 -- Criar trigger que executa após inserir um novo usuário em auth.users
+DROP TRIGGER IF EXISTS on_auth_user_created_role ON auth.users;
 CREATE TRIGGER on_auth_user_created_role
   AFTER INSERT ON auth.users
   FOR EACH ROW
