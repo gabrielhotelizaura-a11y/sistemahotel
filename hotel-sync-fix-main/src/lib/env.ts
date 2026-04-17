@@ -26,14 +26,16 @@ const ENV_FALLBACKS: Record<string, string> = {
 };
 
 function getEnvVar(key: string, defaultValue?: string): string {
-  const fallbackValue = defaultValue ?? ENV_FALLBACKS[key];
-  const value = import.meta.env[key] || fallbackValue;
-  if (!value && !defaultValue) {
-    throw new Error(`Missing required environment variable: ${key}`);
+  const envValue = import.meta.env[key];
+  const fallbackValue = defaultValue ?? ENV_FALLBACKS[key] ?? '';
+  const value = envValue || fallbackValue;
+
+  if (!envValue && ENV_FALLBACKS[key]) {
+    console.warn(`[env] ${key} não foi definido no ambiente; usando fallback interno.`);
   }
 
-  if (!import.meta.env[key] && ENV_FALLBACKS[key]) {
-    console.warn(`[env] ${key} não foi definido no ambiente; usando fallback interno.`);
+  if (!value) {
+    console.error(`[env] Variável obrigatória ausente e sem fallback: ${key}`);
   }
 
   return value;
