@@ -19,11 +19,23 @@ interface EnvConfig {
   };
 }
 
+const ENV_FALLBACKS: Record<string, string> = {
+  VITE_SUPABASE_URL: 'https://cmostfufcenskkmnghlj.supabase.co',
+  VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_KW4B_JNaFDKgF9JAa1f2Pw_xEHT3ka_',
+  VITE_SUPABASE_PROJECT_ID: 'cmostfufcenskkmnghlj',
+};
+
 function getEnvVar(key: string, defaultValue?: string): string {
-  const value = import.meta.env[key] || defaultValue;
+  const fallbackValue = defaultValue ?? ENV_FALLBACKS[key];
+  const value = import.meta.env[key] || fallbackValue;
   if (!value && !defaultValue) {
     throw new Error(`Missing required environment variable: ${key}`);
   }
+
+  if (!import.meta.env[key] && ENV_FALLBACKS[key]) {
+    console.warn(`[env] ${key} não foi definido no ambiente; usando fallback interno.`);
+  }
+
   return value;
 }
 
@@ -56,13 +68,15 @@ export const isStaging = env.app.env === 'staging';
 
 // Validate required environment variables on app start
 export function validateEnv() {
-  const required = [
-    'VITE_SUPABASE_URL',
-    'VITE_SUPABASE_PUBLISHABLE_KEY',
-    'VITE_SUPABASE_PROJECT_ID',
-  ];
+  const required = {
+    VITE_SUPABASE_URL: env.supabase.url,
+    VITE_SUPABASE_PUBLISHABLE_KEY: env.supabase.publishableKey,
+    VITE_SUPABASE_PROJECT_ID: env.supabase.projectId,
+  };
 
-  const missing = required.filter(key => !import.meta.env[key]);
+  const missing = Object.entries(required)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
 
   if (missing.length > 0) {
     throw new Error(
