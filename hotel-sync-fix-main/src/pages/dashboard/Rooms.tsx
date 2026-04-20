@@ -48,6 +48,11 @@ export default function Rooms() {
   const activeOrFutureReservations = reservations.filter(
     (reservation) => reservation.status === 'active' || reservation.status === 'future'
   );
+  const activeReservationRoomIds = new Set(
+    reservations
+      .filter((reservation) => reservation.status === 'active')
+      .map((reservation) => reservation.room_id)
+  );
 
   const occupiedRoomIdsInSelectedDate = new Set(
     activeOrFutureReservations
@@ -405,6 +410,10 @@ export default function Rooms() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredRooms.map((room) => (
+          (() => {
+            const hasActiveReservation = activeReservationRoomIds.has(room.id);
+
+            return (
           <Card key={room.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -463,7 +472,7 @@ export default function Rooms() {
                       disabled={!canReserveOnCurrentViewDate}
                     >
                       {canReserveOnCurrentViewDate
-                        ? room.status === 'occupied'
+                        ? hasActiveReservation
                           ? 'Reserva Futura'
                           : 'Reservar'
                         : 'Reservar (somente hoje)'}
@@ -582,7 +591,7 @@ export default function Rooms() {
                 </Dialog>
               )}
 
-              {room.status === 'occupied' && (
+              {hasActiveReservation && (
                 <div className="space-y-2">
                   <Dialog>
                     <DialogTrigger asChild>
@@ -699,6 +708,8 @@ export default function Rooms() {
               )}
             </CardContent>
           </Card>
+            );
+          })()
         ))}
       </div>
     </div>
