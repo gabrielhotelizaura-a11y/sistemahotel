@@ -44,6 +44,7 @@ export default function Rooms() {
 
   const dateInSelectedMonth = parseDateSafe(selectedViewDate);
   dateInSelectedMonth.setHours(0, 0, 0, 0);
+  const isTodaySelected = selectedViewDate === todayDateString;
 
   const activeOrFutureReservations = reservations.filter(
     (reservation) => reservation.status === 'active' || reservation.status === 'future'
@@ -53,6 +54,12 @@ export default function Rooms() {
       .filter((reservation) => reservation.status === 'active')
       .map((reservation) => reservation.room_id)
   );
+
+  const isRoomReservedOnSelectedDate = (room: any) => {
+    const reservedByReservationRange = occupiedRoomIdsInSelectedDate.has(room.id);
+    const reservedByCurrentStatusToday = isTodaySelected && room.status === 'occupied';
+    return reservedByReservationRange || reservedByCurrentStatusToday;
+  };
 
   const occupiedRoomIdsInSelectedDate = new Set(
     activeOrFutureReservations
@@ -302,12 +309,10 @@ export default function Rooms() {
   });
 
   const availableRoomsInSelectedDate = filteredRooms.filter(
-    (room) => room.status !== 'maintenance' && !occupiedRoomIdsInSelectedDate.has(room.id)
+    (room) => room.status !== 'maintenance' && !isRoomReservedOnSelectedDate(room)
   ).length;
 
-  const occupiedRoomsInSelectedDate = filteredRooms.filter((room) =>
-    occupiedRoomIdsInSelectedDate.has(room.id)
-  ).length;
+  const occupiedRoomsInSelectedDate = filteredRooms.filter((room) => isRoomReservedOnSelectedDate(room)).length;
 
   const maintenanceRooms = filteredRooms.filter((room) => room.status === 'maintenance').length;
 
@@ -412,6 +417,17 @@ export default function Rooms() {
         {filteredRooms.map((room) => (
           (() => {
             const hasActiveReservation = activeReservationRoomIds.has(room.id);
+            const isReservedOnSelectedDate = isRoomReservedOnSelectedDate(room);
+            const topStatusClass = room.status === 'maintenance'
+              ? 'bg-yellow-500'
+              : isReservedOnSelectedDate
+                ? 'bg-red-500'
+                : 'bg-green-500';
+            const topStatusText = room.status === 'maintenance'
+              ? 'Manutenção'
+              : isReservedOnSelectedDate
+                ? 'Ocupado'
+                : 'Disponível no dia';
 
             return (
           <Card key={room.id} className="hover:shadow-lg transition-shadow">
@@ -421,8 +437,8 @@ export default function Rooms() {
                   <DoorOpen className="h-5 w-5 text-primary" />
                   <CardTitle>Quarto {room.number}</CardTitle>
                 </div>
-                <Badge className={getStatusColor(room.status)}>
-                  {getStatusText(room.status)}
+                <Badge className={topStatusClass}>
+                  {topStatusText}
                 </Badge>
               </div>
               <CardDescription>{room.type}</CardDescription>
@@ -452,9 +468,9 @@ export default function Rooms() {
                   <Badge variant="outline" className="border-yellow-500 text-yellow-700">
                     Em manutenção no dia selecionado
                   </Badge>
-                ) : occupiedRoomIdsInSelectedDate.has(room.id) ? (
+                ) : isRoomReservedOnSelectedDate(room) ? (
                   <Badge variant="outline" className="border-red-500 text-red-700">
-                    Reservado em {format(dateInSelectedMonth, 'dd/MM', { locale: ptBR })}
+                    Ocupado
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="border-green-500 text-green-700">
