@@ -11,7 +11,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Hotel, DoorOpen, Calendar, TrendingUp, DollarSign, LogOut, Receipt } from 'lucide-react';
+import { Hotel, DoorOpen, Calendar, TrendingUp, DollarSign, LogOut, Receipt, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 
@@ -45,6 +45,7 @@ export function AppSidebar() {
     { title: 'Preços', url: '/dashboard/prices', icon: DollarSign },
     { title: 'Estatísticas', url: '/dashboard/statistics', icon: TrendingUp },
     { title: 'Despesas', url: '/dashboard/expenses', icon: Receipt },
+    { title: 'Usuários', url: '/dashboard/users', icon: Users },
   ];
 
   const funcionarioItems = [

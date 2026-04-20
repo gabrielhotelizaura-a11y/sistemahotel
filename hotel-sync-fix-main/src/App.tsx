@@ -14,6 +14,7 @@ import Statistics from "./pages/dashboard/Statistics";
 import Reservations from "./pages/dashboard/Reservations";
 import FutureReservations from "./pages/dashboard/FutureReservations";
 import Expenses from "./pages/dashboard/Expenses";
+import Users from "./pages/dashboard/Users";
 import NotFound from "./pages/NotFound";
 import { CACHE_TIME } from "./lib/constants";
 
@@ -78,6 +79,7 @@ const App = () => {
                 <Route path="prices" element={<Prices />} />
                 <Route path="statistics" element={<Statistics />} />
                 <Route path="expenses" element={<Expenses />} />
+                <Route path="users" element={<Users />} />
                 <Route path="reservations" element={<Reservations />} />
                 <Route path="future" element={<FutureReservations />} />
               </Route>

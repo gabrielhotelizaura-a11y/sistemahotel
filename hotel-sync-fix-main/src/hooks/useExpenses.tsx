@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { startOfMonth, endOfMonth } from 'date-fns';
 
 export interface OperationalExpense {
     id: string;
@@ -16,18 +15,12 @@ export function useExpenses() {
 
     const fetchExpenses = async () => {
         try {
-            console.log('📊 Buscando despesas operacionais do mês...');
+            console.log('📊 Buscando despesas operacionais...');
             setLoading(true);
-
-            // Pega despesas do mês atual
-            const start = startOfMonth(new Date());
-            const end = endOfMonth(new Date());
 
             const { data, error } = await supabase
                 .from('operational_expenses' as any)
                 .select('*')
-                .gte('created_at', start.toISOString())
-                .lte('created_at', end.toISOString())
                 .order('created_at', { ascending: false });
 
             if (error) throw error;

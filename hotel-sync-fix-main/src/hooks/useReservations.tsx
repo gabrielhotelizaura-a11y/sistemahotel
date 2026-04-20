@@ -126,6 +126,29 @@ export function useReservations() {
         totalPrice
       });
 
+      // Verificação prévia de conflito de datas para aviso amigável ao usuário
+      const { data: conflictingReservations, error: conflictCheckError } = await supabase
+        .from('reservations')
+        .select('id, check_in, check_out, status')
+        .eq('room_id', roomId)
+        .not('status', 'in', '(cancelled,completed)')
+        .or(
+          `and(check_in.lte.${checkIn},check_out.gt.${checkIn}),` +
+          `and(check_in.lt.${checkOut},check_out.gte.${checkOut}),` +
+          `and(check_in.gte.${checkIn},check_out.lte.${checkOut})`
+        )
+        .limit(1);
+
+      if (conflictCheckError) {
+        console.error('❌ Erro ao verificar conflito de datas:', conflictCheckError);
+        throw conflictCheckError;
+      }
+
+      if (conflictingReservations && conflictingReservations.length > 0) {
+        toast.error('⚠️ Este quarto já está reservado no período selecionado. Escolha outro quarto ou ajuste as datas.');
+        return;
+      }
+
       // Verificar se é reserva futura ou atual
       // Corrigir problema de fuso horário: usar apenas a data sem conversão UTC
       const today = new Date();
@@ -251,6 +274,12 @@ export function useReservations() {
       console.error('❌ Error message:', error.message);
       console.error('❌ Error details:', error.details);
       console.error('❌ Error hint:', error.hint);
+
+      if ((error?.message || '').includes('Quarto já está reservado para este período')) {
+        toast.error('⚠️ Este quarto já está reservado no período selecionado.');
+        return;
+      }
+
       toast.error('Erro ao criar reserva: ' + (error.message || 'Erro desconhecido'));
       throw error;
     }

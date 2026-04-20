@@ -6,11 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingUp, DollarSign, Calendar, Percent, Users, History, Search } from 'lucide-react';
+import { TrendingUp, DollarSign, Calendar, Percent, Users, History, Search, FileDown } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateSafe } from '@/lib/dateUtils';
 import { toast } from 'sonner';
+import { exportStatisticsPdf } from '@/lib/pdfExport';
 
 export default function Statistics() {
   const [loading, setLoading] = useState(true);
@@ -164,21 +165,46 @@ export default function Statistics() {
           <h1 className="text-3xl font-bold">Estatísticas do Mês</h1>
           <p className="text-muted-foreground capitalize">{selectedMonthLabel}</p>
         </div>
-        <Select
-          value={selectedMonth.toString()}
-          onValueChange={(value) => setSelectedMonth(parseInt(value))}
-        >
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Selecione o mês" />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value.toString()}>
-                <span className="capitalize">{option.label}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Select
+            value={selectedMonth.toString()}
+            onValueChange={(value) => setSelectedMonth(parseInt(value))}
+          >
+            <SelectTrigger className="w-full sm:w-[280px]">
+              <SelectValue placeholder="Selecione o mês" />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value.toString()}>
+                  <span className="capitalize">{option.label}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() =>
+              exportStatisticsPdf({
+                monthLabel: selectedMonthLabel,
+                totalRevenue: stats.totalRevenue,
+                totalReservations: stats.totalReservations,
+                occupancyRate: stats.occupancyRate,
+                averageStay: stats.averageStay,
+                completedReservations: filteredReservations.map((reservation) => ({
+                  room: `${reservation.room?.number || '-'} - ${reservation.room?.type || '-'}`,
+                  guest: reservation.guest?.name || '-',
+                  checkIn: format(parseDateSafe(reservation.check_in), 'dd/MM/yyyy'),
+                  checkOut: format(parseDateSafe(reservation.check_out), 'dd/MM/yyyy'),
+                  total: Number(reservation.total_price),
+                })),
+              })
+            }
+            disabled={filteredReservations.length === 0 && stats.totalReservations === 0}
+          >
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar PDF
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
