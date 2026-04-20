@@ -10,13 +10,13 @@ import { Label } from '@/components/ui/label';
 import { DoorOpen, Wifi, Tv, Wind, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { endOfMonth, format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateSafe, getTodayDateString } from '@/lib/dateUtils';
 
 export default function Rooms() {
   const { rooms, loading, refetch } = useRooms();
-  const { createReservation } = useReservations();
+  const { createReservation, reservations } = useReservations();
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -33,6 +33,35 @@ export default function Rooms() {
 
   // 🔍 Estado da pesquisa
   const [searchTerm, setSearchTerm] = useState('');
+
+  // 📅 Visualização de disponibilidade por dia (somente mês atual)
+  const [selectedViewDate, setSelectedViewDate] = useState(getTodayDateString());
+  const todayDateString = getTodayDateString();
+  const canReserveOnCurrentViewDate = selectedViewDate === todayDateString;
+
+  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+
+  const dateInSelectedMonth = parseDateSafe(selectedViewDate);
+  dateInSelectedMonth.setHours(0, 0, 0, 0);
+
+  const activeOrFutureReservations = reservations.filter(
+    (reservation) => reservation.status === 'active' || reservation.status === 'future'
+  );
+
+  const occupiedRoomIdsInSelectedDate = new Set(
+    activeOrFutureReservations
+      .filter((reservation) => {
+        const checkInDate = parseDateSafe(reservation.check_in);
+        const checkOutDate = parseDateSafe(reservation.check_out);
+        checkInDate.setHours(0, 0, 0, 0);
+        checkOutDate.setHours(0, 0, 0, 0);
+
+        // Reserva ocupa da data de check-in até o dia anterior ao check-out
+        return dateInSelectedMonth >= checkInDate && dateInSelectedMonth < checkOutDate;
+      })
+      .map((reservation) => reservation.room_id)
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -62,6 +91,11 @@ export default function Rooms() {
   };
 
   const handleReservation = async () => {
+    if (!canReserveOnCurrentViewDate) {
+      toast.error('Para reservar, selecione a data de hoje na visualização.');
+      return;
+    }
+
     console.log('🔍 DEBUG: Iniciando reserva...', {
       selectedRoom,
       guestName,
@@ -262,6 +296,16 @@ export default function Rooms() {
     return matchesRoomNumber || matchesRoomType;
   });
 
+  const availableRoomsInSelectedDate = filteredRooms.filter(
+    (room) => room.status !== 'maintenance' && !occupiedRoomIdsInSelectedDate.has(room.id)
+  ).length;
+
+  const occupiedRoomsInSelectedDate = filteredRooms.filter((room) =>
+    occupiedRoomIdsInSelectedDate.has(room.id)
+  ).length;
+
+  const maintenanceRooms = filteredRooms.filter((room) => room.status === 'maintenance').length;
+
   if (loading) {
     return <div className="flex justify-center p-8">Carregando...</div>;
   }
@@ -297,6 +341,49 @@ export default function Rooms() {
           {filteredRooms.length} {filteredRooms.length === 1 ? 'quarto encontrado' : 'quartos encontrados'}
         </p>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Disponibilidade por dia (visualização)</CardTitle>
+          <CardDescription>
+            Escolha uma data do mês atual para ver quantos quartos estão disponíveis. Isso não altera o bloqueio de reservas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="max-w-xs">
+            <Label htmlFor="view-date">Data</Label>
+            <Input
+              id="view-date"
+              type="date"
+              value={selectedViewDate}
+              min={monthStart}
+              max={monthEnd}
+              onChange={(e) => setSelectedViewDate(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Disponíveis no dia</p>
+              <p className="text-2xl font-bold text-green-600">{availableRoomsInSelectedDate}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Reservados no dia</p>
+              <p className="text-2xl font-bold text-red-600">{occupiedRoomsInSelectedDate}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Em manutenção</p>
+              <p className="text-2xl font-bold text-yellow-600">{maintenanceRooms}</p>
+            </div>
+          </div>
+
+          {!canReserveOnCurrentViewDate && (
+            <p className="text-sm text-amber-700">
+              Modo visualização: com data diferente de hoje, novas reservas ficam desabilitadas.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Mensagem quando não encontrar nada */}
       {filteredRooms.length === 0 && searchTerm && (
@@ -351,11 +438,35 @@ export default function Rooms() {
                 <span className="text-sm font-normal text-muted-foreground">/noite</span>
               </div>
 
-              {room.status === 'available' && (
+              <div>
+                {room.status === 'maintenance' ? (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-700">
+                    Em manutenção no dia selecionado
+                  </Badge>
+                ) : occupiedRoomIdsInSelectedDate.has(room.id) ? (
+                  <Badge variant="outline" className="border-red-500 text-red-700">
+                    Reservado em {format(dateInSelectedMonth, 'dd/MM', { locale: ptBR })}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-green-500 text-green-700">
+                    Disponível em {format(dateInSelectedMonth, 'dd/MM', { locale: ptBR })}
+                  </Badge>
+                )}
+              </div>
+
+              {room.status !== 'maintenance' && (
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button className="w-full" onClick={() => setSelectedRoom(room)}>
-                      Reservar
+                    <Button
+                      className="w-full"
+                      onClick={() => setSelectedRoom(room)}
+                      disabled={!canReserveOnCurrentViewDate}
+                    >
+                      {canReserveOnCurrentViewDate
+                        ? room.status === 'occupied'
+                          ? 'Reserva Futura'
+                          : 'Reservar'
+                        : 'Reservar (somente hoje)'}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

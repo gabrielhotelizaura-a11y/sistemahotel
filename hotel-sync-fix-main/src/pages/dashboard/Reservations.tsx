@@ -20,6 +20,25 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateSafe } from '@/lib/dateUtils';
 
+type ReservationItem = any;
+
+function groupReservationsByDay(items: ReservationItem[]) {
+  const groups = items.reduce((acc, reservation) => {
+    const key = format(parseDateSafe(reservation.check_in), 'yyyy-MM-dd');
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(reservation);
+    return acc;
+  }, {} as Record<string, ReservationItem[]>);
+
+  return (Object.entries(groups) as [string, ReservationItem[]][])
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, reservations]) => ({
+      dateKey,
+      dateLabel: format(parseDateSafe(dateKey), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+      reservations,
+    }));
+}
+
 export default function Reservations() {
   const { reservations, loading, completeReservation, cancelReservation, togglePaymentStatus, updateReservation } = useReservations();
   const { rooms } = useRooms();
@@ -65,6 +84,8 @@ export default function Reservations() {
 
   const activeReservations = reservations.filter((r) => r.status === 'active');
   const futureReservations = reservations.filter((r) => r.status === 'future');
+  const groupedActiveReservations = groupReservationsByDay(activeReservations);
+  const groupedFutureReservations = groupReservationsByDay(futureReservations);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -99,11 +120,76 @@ export default function Reservations() {
     </Card>
   );
 
+  const renderReservationCard = (reservation: any, isFuture = false) => (
+    <Card key={reservation.id} className="border-muted">
+      <CardContent className="p-4 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <DoorOpen className="h-4 w-4" />
+              <p className="font-semibold">Quarto {reservation.room?.number}</p>
+              <Badge variant="outline">{reservation.room?.type}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">{reservation.num_guests} hóspede(s)</p>
+          </div>
+          <Badge className={getStatusColor(reservation.status)}>{getStatusText(reservation.status)}</Badge>
+        </div>
+
+        <div className="space-y-1 text-sm">
+          <p className="font-medium flex items-center gap-2"><User className="h-4 w-4" />{reservation.guest?.name}</p>
+          <p className="text-muted-foreground break-all">{reservation.guest?.email}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-muted-foreground">Check-in</p>
+            <p className="font-medium">{format(parseDateSafe(reservation.check_in), 'dd/MM/yyyy', { locale: ptBR })}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Check-out</p>
+            <p className="font-medium">{format(parseDateSafe(reservation.check_out), 'dd/MM/yyyy', { locale: ptBR })}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold text-primary">R$ {reservation.total_price.toFixed(2)}</p>
+          {!isFuture && (
+            <Button
+              size="sm"
+              variant={reservation.paid ? 'default' : 'outline'}
+              onClick={() => togglePaymentStatus(reservation.id, reservation.paid)}
+              className={reservation.paid ? 'bg-green-600 hover:bg-green-700' : ''}
+            >
+              {reservation.paid ? '✓ Pago' : 'Marcar como Pago'}
+            </Button>
+          )}
+        </div>
+
+        <div className={`grid grid-cols-1 ${isFuture ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-2`}>
+          <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(reservation)}>
+            <Edit className="h-4 w-4 mr-1" />
+            Editar
+          </Button>
+          {!isFuture && (
+            <Button size="sm" onClick={() => completeReservation(reservation.id, reservation.room_id)}>
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Check-out
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => cancelReservation(reservation.id, reservation.room_id)}>
+            <XCircle className="h-4 w-4 mr-1" />
+            Cancelar
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Reservas</h1>
-        <p className="text-muted-foreground">Ativas e futuras, separadas para facilitar a operação</p>
+        <p className="text-muted-foreground">Ativas e futuras, agrupadas por dia de check-in</p>
       </div>
 
       <Card>
@@ -117,68 +203,18 @@ export default function Reservations() {
           {activeReservations.length === 0 ? (
             <EmptyState text="Nenhuma reserva ativa no momento" />
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {activeReservations.map((reservation) => (
-                <Card key={reservation.id} className="border-muted">
-                  <CardContent className="p-4 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <DoorOpen className="h-4 w-4" />
-                          <p className="font-semibold">Quarto {reservation.room?.number}</p>
-                          <Badge variant="outline">{reservation.room?.type}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {reservation.num_guests} hóspede(s)
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(reservation.status)}>{getStatusText(reservation.status)}</Badge>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium flex items-center gap-2"><User className="h-4 w-4" />{reservation.guest?.name}</p>
-                      <p className="text-muted-foreground break-all">{reservation.guest?.email}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Check-in</p>
-                        <p className="font-medium">{format(parseDateSafe(reservation.check_in), 'dd/MM/yyyy', { locale: ptBR })}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Check-out</p>
-                        <p className="font-medium">{format(parseDateSafe(reservation.check_out), 'dd/MM/yyyy', { locale: ptBR })}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-lg font-bold text-primary">R$ {reservation.total_price.toFixed(2)}</p>
-                      <Button
-                        size="sm"
-                        variant={reservation.paid ? 'default' : 'outline'}
-                        onClick={() => togglePaymentStatus(reservation.id, reservation.paid)}
-                        className={reservation.paid ? 'bg-green-600 hover:bg-green-700' : ''}
-                      >
-                        {reservation.paid ? '✓ Pago' : 'Marcar como Pago'}
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(reservation)}>
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
-                      <Button size="sm" onClick={() => completeReservation(reservation.id, reservation.room_id)}>
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        Check-out
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => cancelReservation(reservation.id, reservation.room_id)}>
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Cancelar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+            <div className="space-y-6">
+              {groupedActiveReservations.map((group) => (
+                <div key={group.dateKey} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-semibold capitalize">{group.dateLabel}</h3>
+                    <Badge variant="secondary">{group.reservations.length}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {group.reservations.map((reservation) => renderReservationCard(reservation, false))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -196,61 +232,24 @@ export default function Reservations() {
           {futureReservations.length === 0 ? (
             <EmptyState text="Nenhuma reserva futura agendada" />
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {futureReservations.map((reservation) => (
-                <Card key={reservation.id} className="border-muted">
-                  <CardContent className="p-4 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <DoorOpen className="h-4 w-4" />
-                          <p className="font-semibold">Quarto {reservation.room?.number}</p>
-                          <Badge variant="outline">{reservation.room?.type}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {reservation.num_guests} hóspede(s)
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(reservation.status)}>{getStatusText(reservation.status)}</Badge>
-                    </div>
-
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium flex items-center gap-2"><User className="h-4 w-4" />{reservation.guest?.name}</p>
-                      <p className="text-muted-foreground break-all">{reservation.guest?.email}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Check-in</p>
-                        <p className="font-medium">{format(parseDateSafe(reservation.check_in), 'dd/MM/yyyy', { locale: ptBR })}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Check-out</p>
-                        <p className="font-medium">{format(parseDateSafe(reservation.check_out), 'dd/MM/yyyy', { locale: ptBR })}</p>
-                      </div>
-                    </div>
-
-                    <p className="text-lg font-bold text-primary">R$ {reservation.total_price.toFixed(2)}</p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => handleOpenEdit(reservation)}>
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => cancelReservation(reservation.id, reservation.room_id)}>
-                        <XCircle className="h-4 w-4 mr-1" />
-                        Cancelar
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+            <div className="space-y-6">
+              {groupedFutureReservations.map((group) => (
+                <div key={group.dateKey} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-semibold capitalize">{group.dateLabel}</h3>
+                    <Badge variant="secondary">{group.reservations.length}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {group.reservations.map((reservation) => renderReservationCard(reservation, true))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog de Edição */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -262,12 +261,7 @@ export default function Reservations() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="edit-name">Nome do Hóspede</Label>
-              <Input
-                id="edit-name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Nome completo"
-              />
+              <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nome completo" />
             </div>
             <div>
               <Label htmlFor="edit-room">Quarto</Label>
@@ -277,7 +271,7 @@ export default function Reservations() {
                 </SelectTrigger>
                 <SelectContent>
                   {rooms
-                    .filter(r => r.status === 'available' || r.id === editingReservation?.room_id)
+                    .filter((r) => r.status === 'available' || r.id === editingReservation?.room_id)
                     .map((room) => (
                       <SelectItem key={room.id} value={room.id}>
                         Quarto {room.number} - {room.type} (R$ {room.price}/noite)
@@ -288,39 +282,21 @@ export default function Reservations() {
             </div>
             <div>
               <Label htmlFor="edit-guests">Número de Pessoas</Label>
-              <Input
-                id="edit-guests"
-                type="number"
-                min="1"
-                value={editNumGuests}
-                onChange={(e) => setEditNumGuests(e.target.value)}
-              />
+              <Input id="edit-guests" type="number" min="1" value={editNumGuests} onChange={(e) => setEditNumGuests(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="edit-checkin">Check-in</Label>
-                <Input
-                  id="edit-checkin"
-                  type="date"
-                  value={editCheckIn}
-                  onChange={(e) => setEditCheckIn(e.target.value)}
-                />
+                <Input id="edit-checkin" type="date" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)} />
               </div>
               <div>
                 <Label htmlFor="edit-checkout">Check-out</Label>
-                <Input
-                  id="edit-checkout"
-                  type="date"
-                  value={editCheckOut}
-                  onChange={(e) => setEditCheckOut(e.target.value)}
-                />
+                <Input id="edit-checkout" type="date" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)} />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveEdit}>Salvar Alterações</Button>
           </DialogFooter>
         </DialogContent>

@@ -8,10 +8,30 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateSafe } from '@/lib/dateUtils';
 
+type ReservationItem = any;
+
+function groupReservationsByDay(items: ReservationItem[]) {
+  const groups = items.reduce((acc, reservation) => {
+    const key = format(parseDateSafe(reservation.check_in), 'yyyy-MM-dd');
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(reservation);
+    return acc;
+  }, {} as Record<string, ReservationItem[]>);
+
+  return (Object.entries(groups) as [string, ReservationItem[]][])
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, reservations]) => ({
+      dateKey,
+      dateLabel: format(parseDateSafe(dateKey), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+      reservations,
+    }));
+}
+
 export default function FutureReservations() {
   const { reservations, loading, cancelReservation } = useReservations();
 
   const futureReservations = reservations.filter(r => r.status === 'future');
+  const groupedFutureReservations = groupReservationsByDay(futureReservations);
 
   if (loading) {
     return <div className="flex justify-center p-8">Carregando...</div>;
@@ -37,68 +57,78 @@ export default function FutureReservations() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                Próximas Reservas
+                Próximas Reservas ({futureReservations.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Quarto</TableHead>
-                    <TableHead>Hóspede</TableHead>
-                    <TableHead>Check-in</TableHead>
-                    <TableHead>Check-out</TableHead>
-                    <TableHead>Pessoas</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {futureReservations.map((reservation) => (
-                    <TableRow key={reservation.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <DoorOpen className="h-4 w-4" />
-                          {reservation.room?.number}
-                          <Badge variant="outline">{reservation.room?.type}</Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          <div>
-                            <div className="font-medium">{reservation.guest?.name}</div>
-                            <div className="text-sm text-muted-foreground">{reservation.guest?.email}</div>
-                            {reservation.guest?.phone && (
-                              <div className="text-sm text-muted-foreground">{reservation.guest?.phone}</div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {format(parseDateSafe(reservation.check_in), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                      </TableCell>
-                      <TableCell>
-                        {format(parseDateSafe(reservation.check_out), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                      </TableCell>
-                      <TableCell>{reservation.num_guests}</TableCell>
-                      <TableCell className="font-semibold text-primary">
-                        R$ {reservation.total_price.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => cancelReservation(reservation.id, reservation.room_id)}
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Cancelar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-6">
+              {groupedFutureReservations.map((group) => (
+                <div key={group.dateKey} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="font-semibold capitalize">{group.dateLabel}</h3>
+                    <Badge variant="secondary">{group.reservations.length}</Badge>
+                  </div>
+
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Quarto</TableHead>
+                        <TableHead>Hóspede</TableHead>
+                        <TableHead>Check-in</TableHead>
+                        <TableHead>Check-out</TableHead>
+                        <TableHead>Pessoas</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.reservations.map((reservation) => (
+                        <TableRow key={reservation.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <DoorOpen className="h-4 w-4" />
+                              {reservation.room?.number}
+                              <Badge variant="outline">{reservation.room?.type}</Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              <div>
+                                <div className="font-medium">{reservation.guest?.name}</div>
+                                <div className="text-sm text-muted-foreground">{reservation.guest?.email}</div>
+                                {reservation.guest?.phone && (
+                                  <div className="text-sm text-muted-foreground">{reservation.guest?.phone}</div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {format(parseDateSafe(reservation.check_in), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {format(parseDateSafe(reservation.check_out), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>{reservation.num_guests}</TableCell>
+                          <TableCell className="font-semibold text-primary">
+                            R$ {reservation.total_price.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => cancelReservation(reservation.id, reservation.room_id)}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Cancelar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
