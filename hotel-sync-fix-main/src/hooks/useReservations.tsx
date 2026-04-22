@@ -98,7 +98,8 @@ export function useReservations() {
           status: res.room.status as any
         } : undefined,
         status: res.status as any,
-        paid: (res as any).paid || false
+        paid: (res as any).paid || false,
+        paid_half: (res as any).paid_half || false
       })));
     } catch (error) {
       console.error('Error fetching reservations:', error);
@@ -419,7 +420,7 @@ export function useReservations() {
 
       const { error } = await supabase
         .from('reservations')
-        .update({ paid: newStatus } as any)
+        .update({ paid: newStatus, paid_half: false } as any)
         .eq('id', reservationId);
 
       if (error) {
@@ -437,6 +438,34 @@ export function useReservations() {
       // Se for erro de coluna inexistente, avisa o usuário
       if (errorMsg.includes('column') || errorMsg.includes('paid')) {
         toast.error('Execute o SQL ADD_PAYMENT_STATUS.sql no Supabase primeiro!');
+      }
+    }
+  };
+
+  const toggleHalfPaymentStatus = async (reservationId: string, currentHalfStatus: boolean) => {
+    try {
+      const newHalfStatus = !currentHalfStatus;
+      console.log(`💰 Alterando status de meio pagamento para: ${newHalfStatus ? 'METADE PAGA' : 'METADE NÃO PAGA'}`);
+
+      const { error } = await supabase
+        .from('reservations')
+        .update({ paid_half: newHalfStatus, paid: false } as any)
+        .eq('id', reservationId);
+
+      if (error) {
+        console.error('❌ Erro do Supabase:', error);
+        throw error;
+      }
+
+      toast.success(newHalfStatus ? 'Reserva marcada como metade paga!' : 'Metade do pagamento desmarcada');
+      fetchReservations();
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar metade do pagamento:', error);
+      const errorMsg = error?.message || 'Erro desconhecido';
+      toast.error(`Erro ao atualizar metade do pagamento: ${errorMsg}`);
+
+      if (errorMsg.includes('column') || errorMsg.includes('paid_half')) {
+        toast.error('Execute a migration de paid_half no Supabase primeiro!');
       }
     }
   };
@@ -535,6 +564,7 @@ export function useReservations() {
     cancelReservation,
     completeReservation,
     togglePaymentStatus,
+    toggleHalfPaymentStatus,
     updateReservation,
     refetch: fetchReservations,
   };

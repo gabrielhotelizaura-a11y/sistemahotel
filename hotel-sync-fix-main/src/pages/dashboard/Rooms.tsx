@@ -7,16 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DoorOpen, Wifi, Tv, Wind, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { endOfMonth, format, startOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { parseDateSafe, getTodayDateString } from '@/lib/dateUtils';
 
 export default function Rooms() {
   const { rooms, loading, refetch } = useRooms();
   const { createReservation, reservations } = useReservations();
+  const todayDateString = getTodayDateString();
+
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -34,16 +37,17 @@ export default function Rooms() {
   // 🔍 Estado da pesquisa
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 📅 Visualização de disponibilidade por dia (somente mês atual)
-  const [selectedViewDate, setSelectedViewDate] = useState(getTodayDateString());
-  const todayDateString = getTodayDateString();
+  // 📅 Visualização de disponibilidade por dia
+  const [selectedViewDate, setSelectedViewDate] = useState(todayDateString);
+  const [climateFilter, setClimateFilter] = useState<'all' | 'air' | 'fan'>('all');
+
   const canReserveOnCurrentViewDate = selectedViewDate === todayDateString;
 
-  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-  const monthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+  const selectedDate = parseDateSafe(selectedViewDate);
+  selectedDate.setHours(0, 0, 0, 0);
 
-  const dateInSelectedMonth = parseDateSafe(selectedViewDate);
-  dateInSelectedMonth.setHours(0, 0, 0, 0);
+  const todayDate = parseDateSafe(todayDateString);
+  todayDate.setHours(0, 0, 0, 0);
   const isTodaySelected = selectedViewDate === todayDateString;
 
   const activeOrFutureReservations = reservations.filter(
@@ -70,7 +74,7 @@ export default function Rooms() {
         checkOutDate.setHours(0, 0, 0, 0);
 
         // Reserva ocupa da data de check-in até o dia anterior ao check-out
-        return dateInSelectedMonth >= checkInDate && dateInSelectedMonth < checkOutDate;
+        return selectedDate >= checkInDate && selectedDate < checkOutDate;
       })
       .map((reservation) => reservation.room_id)
   );
@@ -295,7 +299,19 @@ export default function Rooms() {
 
   // 🔍 Filtrar quartos pela pesquisa
   const filteredRooms = rooms.filter((room) => {
-    if (!searchTerm) return true; // Mostra todos se não tiver busca
+    const hasAirConditioning = room.amenities.some((amenity) => {
+      const normalizedAmenity = amenity.toLowerCase();
+      return normalizedAmenity.includes('ar-condicionado') || normalizedAmenity.includes('ar condicionado');
+    });
+
+    const matchesClimateFilter =
+      climateFilter === 'all' ||
+      (climateFilter === 'air' && hasAirConditioning) ||
+      (climateFilter === 'fan' && !hasAirConditioning);
+
+    if (!matchesClimateFilter) return false;
+
+    if (!searchTerm) return true;
 
     const searchLower = searchTerm.toLowerCase();
 
@@ -356,20 +372,35 @@ export default function Rooms() {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Disponibilidade por dia (visualização)</CardTitle>
           <CardDescription>
-            Escolha uma data do mês atual para ver quantos quartos estão disponíveis. Isso não altera o bloqueio de reservas.
+            Escolha uma data para ver disponibilidade no dia e filtre por tipo de climatização.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="max-w-xs">
-            <Label htmlFor="view-date">Data</Label>
-            <Input
-              id="view-date"
-              type="date"
-              value={selectedViewDate}
-              min={monthStart}
-              max={monthEnd}
-              onChange={(e) => setSelectedViewDate(e.target.value)}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="view-date">Data</Label>
+              <Input
+                id="view-date"
+                type="date"
+                value={selectedViewDate}
+                min={todayDateString}
+                onChange={(e) => setSelectedViewDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="climate-filter">Climatização</Label>
+              <Select value={climateFilter} onValueChange={(value: 'all' | 'air' | 'fan') => setClimateFilter(value)}>
+                <SelectTrigger id="climate-filter">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="air">Com ar-condicionado</SelectItem>
+                  <SelectItem value="fan">Ventilador (sem ar)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -378,7 +409,7 @@ export default function Rooms() {
               <p className="text-2xl font-bold text-green-600">{availableRoomsInSelectedDate}</p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Reservados no dia</p>
+              <p className="text-xs text-muted-foreground">Ocupados no dia</p>
               <p className="text-2xl font-bold text-red-600">{occupiedRoomsInSelectedDate}</p>
             </div>
             <div className="rounded-md border p-3">
@@ -474,7 +505,7 @@ export default function Rooms() {
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="border-green-500 text-green-700">
-                    Disponível em {format(dateInSelectedMonth, 'dd/MM', { locale: ptBR })}
+                    Disponível no dia
                   </Badge>
                 )}
               </div>

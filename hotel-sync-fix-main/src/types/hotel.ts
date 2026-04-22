@@ -33,6 +33,7 @@ export interface Reservation {
   status: ReservationStatus;
   total_price: number;
   paid: boolean;
+  paid_half?: boolean;
   created_at?: string;
   created_by?: string;
   room?: Room;

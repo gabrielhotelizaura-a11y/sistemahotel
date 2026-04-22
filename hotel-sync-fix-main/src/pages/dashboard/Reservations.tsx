@@ -40,7 +40,15 @@ function groupReservationsByDay(items: ReservationItem[]) {
 }
 
 export default function Reservations() {
-  const { reservations, loading, completeReservation, cancelReservation, togglePaymentStatus, updateReservation } = useReservations();
+  const {
+    reservations,
+    loading,
+    completeReservation,
+    cancelReservation,
+    togglePaymentStatus,
+    toggleHalfPaymentStatus,
+    updateReservation,
+  } = useReservations();
   const { rooms } = useRooms();
 
   const [editingReservation, setEditingReservation] = useState<any>(null);
@@ -83,7 +91,19 @@ export default function Reservations() {
   };
 
   const activeReservations = reservations.filter((r) => r.status === 'active');
-  const futureReservations = reservations.filter((r) => r.status === 'future');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const futureReservations = reservations.filter((reservation) => {
+    if (reservation.status === 'future') return true;
+    if (reservation.status !== 'active') return false;
+
+    const checkOutDate = parseDateSafe(reservation.check_out);
+    checkOutDate.setHours(0, 0, 0, 0);
+
+    // Reserva ativa também aparece em futuras se ainda tiver período após hoje
+    return checkOutDate > today;
+  });
   const groupedActiveReservations = groupReservationsByDay(activeReservations);
   const groupedFutureReservations = groupReservationsByDay(futureReservations);
 
@@ -154,14 +174,24 @@ export default function Reservations() {
         <div className="flex items-center justify-between">
           <p className="text-lg font-bold text-primary">R$ {reservation.total_price.toFixed(2)}</p>
           {!isFuture && (
-            <Button
-              size="sm"
-              variant={reservation.paid ? 'default' : 'outline'}
-              onClick={() => togglePaymentStatus(reservation.id, reservation.paid)}
-              className={reservation.paid ? 'bg-green-600 hover:bg-green-700' : ''}
-            >
-              {reservation.paid ? '✓ Pago' : 'Marcar como Pago'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={reservation.paid ? 'default' : 'outline'}
+                onClick={() => togglePaymentStatus(reservation.id, reservation.paid)}
+                className={reservation.paid ? 'bg-green-600 hover:bg-green-700' : ''}
+              >
+                {reservation.paid ? '✓ Pago' : 'Marcar como Pago'}
+              </Button>
+              <Button
+                size="sm"
+                variant={reservation.paid_half ? 'default' : 'outline'}
+                onClick={() => toggleHalfPaymentStatus(reservation.id, reservation.paid_half || false)}
+                className={reservation.paid_half ? 'bg-amber-500 hover:bg-amber-600 text-black' : ''}
+              >
+                {reservation.paid_half ? '✓ Metade paga' : 'Metade do pagamento'}
+              </Button>
+            </div>
           )}
         </div>
 

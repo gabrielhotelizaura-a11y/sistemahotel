@@ -28,9 +28,20 @@ function groupReservationsByDay(items: ReservationItem[]) {
 }
 
 export default function FutureReservations() {
-  const { reservations, loading, cancelReservation } = useReservations();
+  const { reservations, loading, cancelReservation, togglePaymentStatus, toggleHalfPaymentStatus } = useReservations();
 
-  const futureReservations = reservations.filter(r => r.status === 'future');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const futureReservations = reservations.filter((reservation) => {
+    if (reservation.status === 'future') return true;
+    if (reservation.status !== 'active') return false;
+
+    const checkOutDate = parseDateSafe(reservation.check_out);
+    checkOutDate.setHours(0, 0, 0, 0);
+
+    return checkOutDate > today;
+  });
   const groupedFutureReservations = groupReservationsByDay(futureReservations);
 
   if (loading) {
@@ -41,7 +52,7 @@ export default function FutureReservations() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Reservas Futuras</h1>
-        <p className="text-muted-foreground">Visualize e gerencie as próximas reservas</p>
+        <p className="text-muted-foreground">Visualize e gerencie as próximas reservas e as ativas com período futuro</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -114,14 +125,32 @@ export default function FutureReservations() {
                             R$ {reservation.total_price.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => cancelReservation(reservation.id, reservation.room_id)}
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Cancelar
-                            </Button>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant={reservation.paid ? 'default' : 'outline'}
+                                onClick={() => togglePaymentStatus(reservation.id, reservation.paid)}
+                                className={reservation.paid ? 'bg-green-600 hover:bg-green-700' : ''}
+                              >
+                                {reservation.paid ? '✓ Pago' : 'Marcar como Pago'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={reservation.paid_half ? 'default' : 'outline'}
+                                onClick={() => toggleHalfPaymentStatus(reservation.id, reservation.paid_half || false)}
+                                className={reservation.paid_half ? 'bg-amber-500 hover:bg-amber-600 text-black' : ''}
+                              >
+                                {reservation.paid_half ? '✓ Metade paga' : 'Metade do pagamento'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => cancelReservation(reservation.id, reservation.room_id)}
+                              >
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Cancelar
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
